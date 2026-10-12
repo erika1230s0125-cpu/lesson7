@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>計算機</title>
+  <style>
+    /* ページ全体：ダークグレーの背景に、カードを縦に並べて中央に配置 */
+    body {
+      box-sizing: border-box;
+      margin: 0;
+      min-height: 100vh;
+      padding: 32px 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      background-color: #1a1a2e;
+      font-family: "Helvetica Neue", Arial, "Hiragino Sans", "Meiryo", sans-serif;
+    }
+
+    /* 計算機本体と計算履歴：白い角丸カード */
+    .calculator,
+    .history {
+      box-sizing: border-box; /* 幅に padding を含める（スマホではみ出さないように） */
+      width: 400px;
+      max-width: calc(100% - 32px);
+      padding: 32px 28px;
+      background-color: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: 24px;
+      color: #1a1a2e;
+    }
+
+    /* 入力欄：2つを横に並べる */
+    .inputs {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .inputs input {
+      flex: 1;
+      min-width: 0;
+      padding: 12px;
+      font-size: 20px;
+      text-align: center;
+      border: 2px solid #dddde5;
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    /* 入力中の欄は枠の色を変えてわかりやすくする */
+    .inputs input:focus {
+      border-color: #1a1a2e;
+    }
+
+    /* 演算子ボタン：4つを横一列に並べる */
+    .operators {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .operators button {
+      padding: 14px 0;
+      font-size: 26px;
+      font-weight: bold;
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+    }
+
+    /* ホバー時：少し浮き上がって明るくなる */
+    .operators button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+      filter: brightness(1.1);
+    }
+
+    /* クリックした瞬間：沈み込む */
+    .operators button:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    /* 演算子ごとの色 */
+    .btn-add      { background-color: #3b82f6; } /* + 青 */
+    .btn-subtract { background-color: #ef4444; } /* - 赤 */
+    .btn-multiply { background-color: #22c55e; } /* × 緑 */
+    .btn-divide   { background-color: #f97316; } /* ÷ オレンジ */
+
+    /* 結果表示エリア */
+    /* 結果表示エリア（計算式＋結果を入れるグレーの箱） */
+    .display {
+      /* 中身を縦に並べて、上下左右の中央に表示する */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 16px 12px;
+      min-height: 100px;
+      background-color: #f3f4f8;
+      border-radius: 12px;
+    }
+
+    /* 計算式（例：3 + 5 = 8） */
+    #expression {
+      margin: 0 0 4px;
+      min-height: 20px;
+      font-size: 16px;
+      color: #6b7280;
+      word-break: break-all;
+    }
+
+    /* 計算結果 */
+    #result {
+      margin: 0;
+      font-size: 56px;
+      font-weight: bold;
+      color: #1a1a2e;
+      word-break: break-all;
+    }
+
+    /* エラーのときは文字を小さく・赤くする */
+    #result.error {
+      font-size: 20px;
+      color: #ef4444;
+    }
+
+    /* フェードインアニメーション：透明→不透明、少し下から上へ */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    /* Enterキーで使われる演算子ボタンに枠をつける */
+    .operators button.selected {
+      outline: 3px solid #1a1a2e;
+      outline-offset: 2px;
+    }
+
+    /* 「前の結果を使う」ボタン */
+    .reuse-button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #1a1a2e;
+      background-color: #ffffff;
+      border: 2px solid #1a1a2e;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+
+    .reuse-button:hover {
+      color: #ffffff;
+      background-color: #1a1a2e;
+    }
+
+    /* Enterキーの説明文 */
+    .hint {
+      margin: 16px 0 0;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    /* ── 計算履歴 ───────────────────────────────────────────── */
+    .history {
+      padding: 24px 28px;
+      text-align: left;
+    }
+
+    /* 見出しとクリアボタンを左右に並べる */
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .history h2 {
+      margin: 0;
+      font-size: 18px;
+      color: #1a1a2e;
+    }
+
+    .clear-button {
+      padding: 6px 12px;
+      font-size: 14px;
+      color: #6b7280;
+      background-color: #f3f4f8;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+
+    .clear-button:hover {
+      color: #ffffff;
+      background-color: #ef4444;
+    }
+
+    /* 履歴の一覧（ul の点や余白を消す） */
+    #history-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    #history-list li {
+      padding: 10px 12px;
+      font-size: 18px;
+      color: #1a1a2e;
+      border-bottom: 1px solid #ececf2;
+      word-break: break-all;
+    }
+
+    #history-list li:last-child {
+      border-bottom: none;
+    }
+
+    /* 履歴がないときのメッセージ */
+    #history-empty {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 計算機全体を白いカードで囲む -->
+  <div class="calculator">
+    <h1>計算機</h1>
+
+    <!-- 数値を入力する欄。type="number" で数字専用の入力欄になる -->
+    <div class="inputs">
+      <input type="number" id="num1" value="0">
+      <input type="number" id="num2" value="0">
+    </div>
+
+    <!-- 演算子ボタン。onclick で押したときに呼ぶ関数と引数を指定 -->
+    <!-- class で色分け用の名前をつける -->
+    <!-- data-operator → Enterキー用に、どのボタンがどの演算子かをJSから探せるようにする -->
+    <div class="operators">
+      <button class="btn-add" data-operator="+" onclick="calculate('+')">+</button>
+      <button class="btn-subtract" data-operator="-" onclick="calculate('-')">-</button>
+      <button class="btn-multiply" data-operator="×" onclick="calculate('×')">×</button>
+      <button class="btn-divide" data-operator="÷" onclick="calculate('÷')">÷</button>
+    </div>
+
+    <!-- 計算式と計算結果を表示する場所。id をつけてJSから操作できるようにする -->
+    <div class="display" id="display">
+      <p id="expression"></p>
+      <p id="result">0</p>
+    </div>
+
+    <!-- 前の結果を左の入力欄にセットするボタン。hidden → 最初は隠しておく -->
+    <button class="reuse-button" id="reuse-button" onclick="useLastResult()" hidden>
+      前の結果を使う
+    </button>
+
+    <p class="hint">Enterキーで計算できます（最後に押した演算子を使います）</p>
+  </div>
+
+  <!-- 計算履歴。新しい計算が一番上に追加される -->
+  <div class="history">
+    <div class="history-header">
+      <h2>計算履歴</h2>
+      <button class="clear-button" onclick="clearHistory()">履歴をクリア</button>
+    </div>
+    <ul id="history-list"></ul>
+    <p id="history-empty">まだ履歴はありません</p>
+  </div>
+
+  <script>
+    let lastResult = null;     // 前回の計算結果（まだ計算していなければ null）
+    let lastOperator = '+';    // 最後に押した演算子（Enterキーで使う）
+
+    // ── 関数 ──────────────────────────────────────────────────────
+    // calculate = 計算を行う関数。押されたボタンの演算子が引数として渡される
+    function calculate(operator) {
+
+      // 押した演算子を覚えておき、そのボタンに枠をつける
+      lastOperator = operator;
+      document.querySelectorAll('.operators button').forEach(function (button) {
+        button.classList.toggle('selected', button.dataset.operator === operator);
+      });
+
+      // ── 変数 ──────────────────────────────────────────────────
+      // Number() → 文字列を数値に変換する
+      // document.getElementById('num1').value → id="num1" の入力欄の値を取得
+      let a = Number(document.getElementById('num1').value);
+      let b = Number(document.getElementById('num2').value);
+      let result;  // 計算結果を入れる箱（まだ中身は空）
+
+      // ── 条件分岐 ──────────────────────────────────────────────
+      // どの演算子ボタンが押されたかで処理を変える
+      if (operator === '+') {
+        result = a + b;
+      } else if (operator === '-') {
+        result = a - b;
+      } else if (operator === '×') {
+        result = a * b;
+      } else if (operator === '÷') {
+        if (b === 0) {
+          result = 'エラー: 0では割れません';
+        } else {
+          result = a / b;
+        }
+      }
+
+      // 数が大きすぎて計算できないとき（Infinity など）もエラーにする
+      if (typeof result === 'number' && !Number.isFinite(result)) {
+        result = 'エラー: 計算できません';
+      }
+
+      // エラーかどうか（エラーのときは result に文字列が入っている）
+      let isError = typeof result === 'string';
+
+      // 小数点第3位で四捨五入して、小数点第2位までにする（例：3.3333… → 3.33）
+      if (!isError) {
+        result = Math.round(result * 100) / 100;
+      }
+
+      // ── 計算式をつくる ────────────────────────────────────────
+      // マイナスの数は ( ) で囲んで「3 - (-5)」のように見やすくする
+      let left = a < 0 ? '(' + a + ')' : a;
+      let right = b < 0 ? '(' + b + ')' : b;
+      let expression = left + ' ' + operator + ' ' + right;
+      // エラーでなければ「= 結果」もつける（例：3 + 5 = 8）
+      if (!isError) {
+        expression = expression + ' = ' + result;
+      }
+
+      // 計算式と計算結果を画面に表示する（DOM操作）
+      document.getElementById('expression').textContent = expression;
+      const resultEl = document.getElementById('result');
+      resultEl.textContent = result;
+
+      // エラーのときは class="error" をつけて赤く表示する
+      resultEl.classList.toggle('error', isError);
+
+      // ── フェードイン ──────────────────────────────────────────
+      // 一度 class を外してからつけ直すと、毎回アニメーションが再生される
+      const displayEl = document.getElementById('display');
+      displayEl.classList.remove('fade-in');
+      void displayEl.offsetWidth;  // ブラウザに再描画させるためのおまじない
+      displayEl.classList.add('fade-in');
+
+      // エラーでなければ計算履歴に記録し、「前の結果を使う」ボタンを表示する
+      if (!isError) {
+        addHistory(expression);
+        lastResult = result;
+        document.getElementById('reuse-button').hidden = false;
+      }
+    }
+
+    // useLastResult = 前の計算結果を左の入力欄にセットする関数
+    function useLastResult() {
+      if (lastResult === null) {
+        return;  // まだ計算していなければ何もしない
+      }
+      document.getElementById('num1').value = lastResult;
+      // 続けて右の入力欄に数字を打てるように、カーソルを移動して中身を選択する
+      const num2El = document.getElementById('num2');
+      num2El.focus();
+      num2El.select();
+    }
+
+    // ── Enterキーで計算 ───────────────────────────────────────────
+    // 入力欄で Enter が押されたら、最後に押した演算子で計算する
+    document.querySelectorAll('.inputs input').forEach(function (input) {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' && !event.isComposing) {
+          calculate(lastOperator);
+        }
+      });
+    });
+
+    // ── 計算履歴 ──────────────────────────────────────────────────
+    const MAX_HISTORY = 5;  // 表示する履歴の最大件数
+
+    // addHistory = 履歴の一番上に1件追加する関数
+    function addHistory(text) {
+      const listEl = document.getElementById('history-list');
+
+      // <li> 要素を新しくつくって、フェードインの class をつける
+      const li = document.createElement('li');
+      li.textContent = text;
+      li.classList.add('fade-in');
+
+      // prepend → リストの先頭（一番上）に追加する
+      listEl.prepend(li);
+
+      // 5件を超えたら、一番古い（一番下の）項目を消す
+      while (listEl.children.length > MAX_HISTORY) {
+        listEl.lastElementChild.remove();
+      }
+
+      // 履歴があるので「まだ履歴はありません」を隠す
+      document.getElementById('history-empty').hidden = true;
+    }
+
+    // clearHistory = 履歴をすべて消す関数
+    function clearHistory() {
+      document.getElementById('history-list').innerHTML = '';
+      document.getElementById('history-empty').hidden = false;
+    }
+  </script>
+
+</body>
+</html>
